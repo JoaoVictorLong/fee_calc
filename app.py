@@ -43,14 +43,20 @@ def get_performance_metrics():
     """
     Busca métricas de performance incluindo Impermanent Loss.
     """
+    print("DEBUG: Iniciando busca de métricas de performance...")
     url = f"https://api.revert.finance/v1/positions/arbitrum/uniswapv3/{POSITION_ID}"
     
     try:
         response = requests.get(url, timeout=30)
+        print(f"DEBUG: Status code da API: {response.status_code}")
         if response.status_code == 200 and response.json().get("success"):
             data = response.json().get("data", {})
+            print("DEBUG: Dados obtidos com sucesso da API.")
             return data
+        else:
+            print("DEBUG: API não retornou success ou status != 200.")
     except Exception as e:
+        print(f"DEBUG: Erro ao buscar dados: {e}")
         st.error(f"Erro ao buscar dados: {e}")
     
     return None
@@ -61,14 +67,20 @@ def get_exchange_rate():
     """
     Obtém a taxa de câmbio USD-BRL atual.
     """
+    print("DEBUG: Iniciando busca da taxa de câmbio...")
     try:
         response = requests.get(
             "https://economia.awesomeapi.com.br/json/last/USD-BRL"
         )
+        print(f"DEBUG: Status code da API de câmbio: {response.status_code}")
         if response.status_code == 200:
             usd_brl = float(response.json()["USDBRL"]["bid"])
+            print(f"DEBUG: Taxa obtida: {usd_brl}")
             return usd_brl
+        else:
+            print("DEBUG: Falha na API de câmbio.")
     except Exception as e:
+        print(f"DEBUG: Erro ao buscar câmbio: {e}")
         st.error(f"Erro ao buscar câmbio: {e}")
     
     return None
@@ -90,6 +102,8 @@ def main():
     with st.spinner("Carregando dados..."):
         data = get_performance_metrics()
         usd_brl = get_exchange_rate()
+    
+    print(f"DEBUG: data is None: {data is None}, usd_brl is None: {usd_brl is None}")
     
     if not data or not usd_brl:
         st.error("❌ Erro ao carregar dados. Tente novamente.")

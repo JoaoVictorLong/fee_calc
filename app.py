@@ -8,6 +8,7 @@ import streamlit as st
 import requests
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 POSITION_ID = 5303576
 
@@ -43,45 +44,51 @@ def get_performance_metrics():
     """
     Busca métricas de performance incluindo Impermanent Loss.
     """
-    print("DEBUG: Iniciando busca de métricas de performance...")
     url = f"https://api.revert.finance/v1/positions/arbitrum/uniswapv3/{POSITION_ID}"
     
     try:
         response = requests.get(url, timeout=30)
-        print(f"DEBUG: Status code da API: {response.status_code}")
         if response.status_code == 200 and response.json().get("success"):
             data = response.json().get("data", {})
-            print("DEBUG: Dados obtidos com sucesso da API.")
             return data
-        else:
-            print("DEBUG: API não retornou success ou status != 200.")
     except Exception as e:
-        print(f"DEBUG: Erro ao buscar dados: {e}")
-        st.error(f"Erro ao buscar dados: {e}")
+        pass
     
     return None
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)
 def get_exchange_rate():
     """
     Obtém a taxa de câmbio USD-BRL atual.
+    Tenta múltiplas APIs com fallback.
     """
-    print("DEBUG: Iniciando busca da taxa de câmbio...")
-    try:
-        response = requests.get(
-            "https://economia.awesomeapi.com.br/json/last/USD-BRL"
-        )
-        print(f"DEBUG: Status code da API de câmbio: {response.status_code}")
-        if response.status_code == 200:
-            usd_brl = float(response.json()["USDBRL"]["bid"])
-            print(f"DEBUG: Taxa obtida: {usd_brl}")
-            return usd_brl
-        else:
-            print("DEBUG: Falha na API de câmbio.")
-    except Exception as e:
-        print(f"DEBUG: Erro ao buscar câmbio: {e}")
-        st.error(f"Erro ao buscar câmbio: {e}")
+    apis = [
+        {
+            "url": "https://open.er-api.com/v6/latest?base=USD",
+            "name": "open.er-api.com",
+            "parse": lambda resp: float(resp.json()["rates"]["BRL"])
+        },
+        {
+            "url": "https://api.exchangerate-api.com/v4/latest/USD",
+            "name": "exchangerate-api.com",
+            "parse": lambda resp: float(resp.json()["rates"]["BRL"])
+        },
+        {
+            "url": "https://economia.awesomeapi.com.br/json/last/USD-BRL",
+            "name": "awesomeapi",
+            "parse": lambda resp: float(resp.json()["USDBRL"]["bid"])
+        }
+    ]
+    
+    for api_config in apis:
+        try:
+            response = requests.get(api_config["url"], timeout=10)
+            if response.status_code == 200:
+                usd_brl = api_config["parse"](response)
+                return usd_brl
+        except Exception:
+            continue
     
     return None
 
@@ -103,8 +110,6 @@ def main():
         data = get_performance_metrics()
         usd_brl = get_exchange_rate()
     
-    print(f"DEBUG: data is None: {data is None}, usd_brl is None: {usd_brl is None}")
-    
     if not data or not usd_brl:
         st.error("❌ Erro ao carregar dados. Tente novamente.")
         return
@@ -123,13 +128,15 @@ def main():
     total_pnl_brl = total_pnl_usd * usd_brl
     
     # Info bar
+    hora = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    
     info_col1, info_col2, info_col3 = st.columns(3)
     with info_col1:
         st.metric("Posição ID", POSITION_ID)
     with info_col2:
         st.metric("Taxa USD/BRL", f"R$ {usd_brl:.2f}")
     with info_col3:
-        st.metric("Atualizado", datetime.now().strftime("%H:%M:%S"))
+        st.metric("Atualizado", hora.strftime("%H:%M:%S"))
     
     st.divider()
     

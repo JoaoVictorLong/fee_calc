@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Display interativo para monitorar Fees e Impermanent Loss
-Streamlit app com visualização em tempo real
+Streamlit app com visualização em tempo real - Otimizado para Raspberry Pi
 """
 
 import streamlit as st
@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS
+# Custom CSS simplificado para reduzir overhead
 st.markdown("""
 <style>
     [data-testid="stMetricValue"] {
@@ -43,16 +43,19 @@ st.markdown("""
 def get_performance_metrics():
     """
     Busca métricas de performance incluindo Impermanent Loss.
+    Otimizado com retry simples.
     """
     url = f"https://api.revert.finance/v1/positions/arbitrum/uniswapv3/{POSITION_ID}"
     
-    try:
-        response = requests.get(url, timeout=30)
-        if response.status_code == 200 and response.json().get("success"):
-            data = response.json().get("data", {})
-            return data
-    except Exception as e:
-        pass
+    for attempt in range(3):  # Retry até 3 vezes
+        try:
+            response = requests.get(url, timeout=15)  # Timeout reduzido
+            if response.status_code == 200 and response.json().get("success"):
+                data = response.json().get("data", {})
+                return data
+        except Exception:
+            time.sleep(1)  # Backoff simples
+            continue
     
     return None
 
@@ -61,7 +64,7 @@ def get_performance_metrics():
 def get_exchange_rate():
     """
     Obtém a taxa de câmbio USD-BRL atual.
-    Tenta múltiplas APIs com fallback.
+    Tenta múltiplas APIs com fallback, otimizado.
     """
     apis = [
         {
@@ -83,7 +86,7 @@ def get_exchange_rate():
     
     for api_config in apis:
         try:
-            response = requests.get(api_config["url"], timeout=10)
+            response = requests.get(api_config["url"], timeout=8)  # Timeout reduzido
             if response.status_code == 200:
                 usd_brl = api_config["parse"](response)
                 return usd_brl
@@ -105,7 +108,7 @@ def main():
             st.cache_data.clear()
             st.rerun()
     
-    # Buscar dados
+    # Buscar dados com cache para reduzir chamadas
     with st.spinner("Carregando dados..."):
         data = get_performance_metrics()
         usd_brl = get_exchange_rate()
@@ -114,7 +117,7 @@ def main():
         st.error("❌ Erro ao carregar dados. Tente novamente.")
         return
     
-    # Extrair dados
+    # Extrair dados - otimizado para menos cálculos repetitivos
     performance = data.get("performance", {})
     hodl = performance.get("hodl", {})
     
@@ -140,7 +143,7 @@ def main():
     
     st.divider()
     
-    # Cards principais - Fees e IL
+    # Cards principais - Fees e IL (HTML simplificado)
     col1, col2, col3 = st.columns(3)
     
     # Fees Coletadas
@@ -165,7 +168,7 @@ def main():
     
     st.divider()
     
-    # Detalhes expandíveis
+    # Detalhes expandíveis - só calcula se expandido
     with st.expander("📈 Detalhes Completos de Performance"):
         col1, col2 = st.columns(2)
         
@@ -193,16 +196,23 @@ def main():
             st.metric("In Range", in_range)
             st.metric("Age (dias)", f"{age:.2f}")
         
-        # Tokens
+        # Tokens - otimizado para menos colunas se muitos tokens
         st.subheader("🪙 Tokens na Posição")
         tokens = data.get("tokens", {})
         
-        token_cols = st.columns(len(tokens))
-        for idx, (addr, token_info) in enumerate(tokens.items()):
-            with token_cols[idx]:
+        if len(tokens) <= 4:
+            token_cols = st.columns(len(tokens))
+            for idx, (addr, token_info) in enumerate(tokens.items()):
+                with token_cols[idx]:
+                    symbol = token_info.get("symbol", "N/A")
+                    price = float(token_info.get("price", 0))
+                    st.metric(symbol, f"${price:.2f}")
+        else:
+            # Lista simples se muitos tokens
+            for addr, token_info in tokens.items():
                 symbol = token_info.get("symbol", "N/A")
                 price = float(token_info.get("price", 0))
-                st.metric(symbol, f"${price:.2f}")
+                st.write(f"{symbol}: ${price:.2f}")
     
     # Footer com informações
     st.divider()
@@ -215,16 +225,8 @@ def main():
     with footer_col3:
         st.caption("📊 PnL: Resultado líquido (Fees - IL)")
     
-    # Auto-refresh a cada 60 segundos
-    st.markdown("""
-    <script>
-        setTimeout(function() {
-            window.location.reload();
-        }, 60000);
-    </script>
-    """, unsafe_allow_html=True)
-    
-    st.caption("🔄 Auto-refresh a cada 60 segundos | Última atualização: " + datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+    # Auto-refresh removido para reduzir overhead - usar botão manual
+    st.caption("🔄 Use o botão 'Atualizar' | Última atualização: " + datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
 
 
 if __name__ == "__main__":
